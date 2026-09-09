@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getUserFromRequest } from "@/lib/api/authUser";
-import { resolveGeminiKey, generateWithHistory } from "@/lib/gemini";
+import { resolveGeminiKey, generateRaw } from "@/lib/gemini";
 
-// POST /api/ai/chat - multi-turn Gemini call backing ChatPanel (both the
-// subject-scoped assistant and the global ClassVault assistant). Body:
-// { history: { role: "user" | "model"; text: string }[] }. The API key is
-// resolved server-side (per-user Settings, then GEMINI_API_KEY from
-// .env.local) and never touches the client.
+// POST /api/ai/generate - single-shot Gemini call backing apiGenerate
+// (currently used by LecturesTab for OCR'd-lecture insight generation).
+// Body: { prompt: string }. The API key is resolved server-side (per-user
+// Settings, then GEMINI_API_KEY from .env.local) and never touches the
+// client.
 export async function POST(req: NextRequest) {
   const user = getUserFromRequest(req);
   if (!user) return NextResponse.json({ error: "Not signed in." }, { status: 401 });
@@ -18,14 +18,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
-  const history = Array.isArray(body?.history) ? body.history : null;
-  if (!history || history.length === 0) {
-    return NextResponse.json({ error: "history is required." }, { status: 400 });
+  const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
+  if (!prompt) {
+    return NextResponse.json({ error: "prompt is required." }, { status: 400 });
   }
 
   try {
     const apiKey = await resolveGeminiKey(user);
-    const text = await generateWithHistory(history, apiKey);
+    const text = await generateRaw(prompt, apiKey);
     return NextResponse.json({ text });
   } catch (err: any) {
     return NextResponse.json(

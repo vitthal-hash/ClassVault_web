@@ -54,7 +54,18 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
   };
 
   const openFile = (r: Resource) => {
-    window.open(r.fileRef, "_blank");
+    // Browsers can render PDFs and images natively, so those open directly.
+    // PPT/DOC/DOCX have no built-in browser viewer and would otherwise just
+    // download - route those through Microsoft's Office Online viewer so
+    // they display inline instead.
+    if (r.type === "ppt" || r.type === "word") {
+      const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(
+        r.fileRef
+      )}`;
+      window.open(viewerUrl, "_blank");
+    } else {
+      window.open(r.fileRef, "_blank");
+    }
   };
 
   const remove = async (id: number) => {

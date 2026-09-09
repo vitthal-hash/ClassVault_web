@@ -65,7 +65,18 @@ export function AssignmentsTab({
 
   const openFile = (a: Assignment) => {
     if (!a.fileRef) return;
-    window.open(a.fileRef, "_blank");
+    // Browsers render PDFs natively, but have no built-in viewer for
+    // .doc/.docx - route those through Microsoft's Office Online viewer
+    // so they display inline instead of just downloading.
+    const isWord = /\.docx?$/i.test(a.fileName ?? "");
+    if (isWord) {
+      const viewerUrl = `https://view.officeapps.live.com/op/view.aspx?src=${encodeURIComponent(
+        a.fileRef
+      )}`;
+      window.open(viewerUrl, "_blank");
+    } else {
+      window.open(a.fileRef, "_blank");
+    }
   };
 
   return (
