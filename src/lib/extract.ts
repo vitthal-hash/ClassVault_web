@@ -28,3 +28,30 @@ export async function extractPdfText(file: Blob): Promise<string> {
   }
   return text.trim();
 }
+
+/** Extracts the readable text from a modern Word document. Kept browser-side
+ * so a chat attachment never has to leave the student's device just to be
+ * converted into text. */
+export async function extractDocxText(file: Blob): Promise<string> {
+  const mammoth = await import("mammoth/mammoth.browser");
+  const result = await mammoth.extractRawText({ arrayBuffer: await file.arrayBuffer() });
+  return result.value.trim();
+}
+
+/** PowerPoint files are ZIP archives. Slide XML contains the visible text in
+ * <a:t> elements, so reading those elements gives a useful study transcript
+ * without sending the deck to a third party. */
+export async function extractPptxText(file: Blob): Promise<string> {
+  const JSZip = (await import("jszip")).default;
+  const archive = await JSZip.loadAsync(await file.arrayBuffer());
+  const slideNames = Object.keys(archive.files)
+    .filter((name) => /^ppt\/slides\/slide\d+\.xml$/i.test(name))
+    .sort((a, b) => Number(a.match(/slide(\d+)/i)?.[1]) - Number(b.match(/slide(\d+)/i)?.[1]));
+  const slides = await Promise.all(slideNames.map(async (name) => {
+    const xml = await archive.files[name].async("string");
+    return Array.from(xml.matchAll(/<a:t>([\s\S]*?)<\/a:t>/g))
+      .map((match) => match[1].replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">"))
+      .join(" ");
+  }));
+  return slides.filter(Boolean).join("\n\n").trim();
+}

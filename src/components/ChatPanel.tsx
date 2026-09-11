@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, Sparkles, User } from "lucide-react";
+import { Send, Loader2, Sparkles, User, Paperclip, X } from "lucide-react";
 import { useLocalUser } from "@/lib/local/useLocalUser";
-import { ChatMessages, Subjects, SyllabusRepo, Resources, Lectures } from "@/lib/local/repo";
+import { ChatMessages } from "@/lib/local/repo";
 import type { ChatMessage } from "@/lib/local/types";
-import { GLOBAL_ASSISTANT_SUBJECT_ID } from "@/lib/local/types";
-import { apiChat, apiAssistant } from "@/lib/api/client";
+import { AI_ACTIONS, GLOBAL_ASSISTANT_SUBJECT_ID } from "@/lib/local/types";
+import { apiSubjectChat, apiAssistant } from "@/lib/api/client";
+import { extractDocxText, extractPdfText, extractPptxText, ocrImage } from "@/lib/extract";
 import { useTheme } from "@/lib/theme/ThemeContext";
 import { runAssistantAction } from "@/lib/assistant/dispatcher";
 
@@ -26,7 +27,10 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [attachments, setAttachments] = useState<{ name: string; text: string }[]>([]);
+  const [extracting, setExtracting] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
   const isGlobalAssistant = subjectId === GLOBAL_ASSISTANT_SUBJECT_ID;
 
   const load = useCallback(async () => {
@@ -42,24 +46,30 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const buildContext = async (): Promise<string> => {
-    if (!username || subjectId < 0) {
-      return "You are ClassVault's helpful study assistant, embedded in an academic organizer web app.";
+  const addFiles = async (files: FileList | null) => {
+    if (!files || isGlobalAssistant) return;
+    setError(null);
+    setExtracting(true);
+    try {
+      const extracted = await Promise.all(Array.from(files).slice(0, 3).map(async (file) => {
+        if (file.size > 10 * 1024 * 1024) throw new Error(`${file.name} is over the 10 MB chat limit.`);
+        let text = "";
+        if (file.type === "application/pdf" || /\.pdf$/i.test(file.name)) text = await extractPdfText(file);
+        else if (file.type.startsWith("image/")) text = await ocrImage(file);
+        else if (/\.docx$/i.test(file.name)) text = await extractDocxText(file);
+        else if (/\.pptx$/i.test(file.name)) text = await extractPptxText(file);
+        else if (/\.(txt|md|csv)$/i.test(file.name)) text = await file.text();
+        else throw new Error(`${file.name} is unsupported. Attach a PDF, image, DOCX, PPTX, TXT, MD, or CSV file.`);
+        if (!text.trim()) throw new Error(`No readable text was found in ${file.name}.`);
+        return { name: file.name, text: text.slice(0, 30_000) };
+      }));
+      setAttachments((current) => [...current, ...extracted].slice(0, 3));
+    } catch (e: any) {
+      setError(e?.message || "Could not read that attachment.");
+    } finally {
+      setExtracting(false);
+      if (fileInput.current) fileInput.current.value = "";
     }
-    const subject = await Subjects.get(username, subjectId);
-    const syllabus = await SyllabusRepo.forSubject(username, subjectId);
-    const resources = await Resources.forSubject(username, subjectId);
-    const lectures = await Lectures.forSubject(username, subjectId);
-
-    let ctx = `You are a study assistant grounded ONLY in the material for the subject "${subject?.name}". Use the context below to answer the student's questions. If something isn't covered by the material, say so rather than guessing.\n\n`;
-    if (syllabus?.extractedText) ctx += `SYLLABUS:\n${syllabus.extractedText.slice(0, 4000)}\n\n`;
-    for (const r of resources.slice(0, 8)) {
-      if (r.extractedText) ctx += `RESOURCE (${r.name}):\n${r.extractedText.slice(0, 2000)}\n\n`;
-    }
-    for (const l of lectures.slice(0, 15)) {
-      if (l.ocrText) ctx += `LECTURE (${l.lectureCode}):\n${l.ocrText.slice(0, 1500)}\n\n`;
-    }
-    return ctx.slice(0, 24000);
   };
 
   const send = async () => {
@@ -100,19 +110,12 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
       return;
     }
 
-    await ChatMessages.add(username, subjectId, "user", text);
-    const updated = await ChatMessages.forSubject(username, subjectId);
-    setMessages(updated);
+    const attached = attachments;
+    setAttachments([]);
+    setMessages((prev) => [...prev, { id: -Date.now(), subjectId, role: "user", content: `${text}${attached.length ? `\n\n[Attached: ${attached.map((a) => a.name).join(", ")}]` : ""}`, createdAt: new Date().toISOString() }]);
     setSending(true);
     try {
-      const context = await buildContext();
-      const history = [
-        { role: "user" as const, text: context },
-        { role: "model" as const, text: "Understood, I'll answer using that context." },
-        ...updated.map((m) => ({ role: (m.role === "user" ? "user" : "model") as "user" | "model", text: m.content })),
-      ];
-      const reply = await apiChat(history);
-      await ChatMessages.add(username, subjectId, "assistant", reply);
+      await apiSubjectChat(subjectId, text, attached);
       setMessages(await ChatMessages.forSubject(username, subjectId));
     } catch (e: any) {
       setError(e?.message || "Something went wrong reaching Gemini.");
@@ -129,7 +132,7 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
             <Sparkles className="h-7 w-7 text-brand-500 mx-auto mb-2" />
             {subjectId < 0
               ? "Ask me anything about ClassVault or your studies."
-              : `Ask anything about ${subjectName ?? "this subject"} — I'll answer using its syllabus, resources, and lectures.`}
+              : `Ask about ${subjectName ?? "this subject"}. I use its syllabus, notes, resources, lectures, and assignments — or attach a file just for this chat.`}
           </div>
         )}
         {messages.map((m) => (
@@ -170,7 +173,42 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
 
       {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
 
+      {!isGlobalAssistant && (
+        <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
+          {AI_ACTIONS.map((action) => (
+            <button
+              key={action.id}
+              className="btn-secondary shrink-0 text-xs"
+              disabled={sending || extracting}
+              title={action.instruction}
+              onClick={() => setInput(action.instruction)}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {!isGlobalAssistant && attachments.length > 0 && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {attachments.map((attachment) => (
+            <span key={attachment.name} className="inline-flex items-center gap-1 rounded-full bg-brand-50 dark:bg-brand-500/15 px-3 py-1 text-xs text-brand-600 dark:text-brand-300">
+              <Paperclip className="h-3 w-3" /> {attachment.name}
+              <button aria-label={`Remove ${attachment.name}`} onClick={() => setAttachments((items) => items.filter((item) => item !== attachment))}><X className="h-3 w-3" /></button>
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center gap-2 mt-4 border-t border-line dark:border-white/10 pt-4">
+        {!isGlobalAssistant && (
+          <>
+            <button className="btn-secondary px-3" title="Attach a file to this subject chat" onClick={() => fileInput.current?.click()} disabled={sending || extracting || attachments.length >= 3}>
+              {extracting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Paperclip className="h-4 w-4" />}
+            </button>
+            <input ref={fileInput} type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.webp,.docx,.pptx,.txt,.md,.csv" className="hidden" onChange={(e) => addFiles(e.target.files)} />
+          </>
+        )}
         <input
           className="input"
           placeholder="Type a message…"
@@ -178,7 +216,7 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
         />
-        <button className="btn-primary" onClick={send} disabled={sending || !input.trim()}>
+        <button className="btn-primary" onClick={send} disabled={sending || extracting || !input.trim()}>
           <Send className="h-4 w-4" />
         </button>
       </div>

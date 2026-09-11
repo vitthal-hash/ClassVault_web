@@ -106,6 +106,16 @@ export const apiChat = (history: { role: "user" | "model"; text: string }[]) =>
     body: JSON.stringify({ history }),
   }).then((r) => r.text);
 
+export const apiSubjectChat = (
+  subjectId: number,
+  message: string,
+  attachments: { name: string; text: string }[] = []
+) =>
+  request<{ text: string }>("/api/ai/subject-chat", {
+    method: "POST",
+    body: JSON.stringify({ subjectId, message, attachments }),
+  }).then((r) => r.text);
+
 // The global "ClassVault" assistant (AI Chat page). Unlike apiChat above,
 // this one can also ask the app to actually do something - change the
 // theme, open a subject, add a note/assignment - via the `action` field.
