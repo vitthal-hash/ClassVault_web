@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, LogOut, ChevronRight } from "lucide-react";
+import { LogOut, ChevronRight } from "lucide-react";
 import { useAuth } from "@/lib/auth/AuthContext";
+import { NotificationsBell } from "@/components/NotificationsBell";
 
 export function TopBar({ crumbs }: { crumbs: string[] }) {
   const { user, logout } = useAuth();
@@ -29,10 +30,7 @@ export function TopBar({ crumbs }: { crumbs: string[] }) {
       </div>
 
       <div className="flex items-center gap-3">
-        <button className="h-10 w-10 rounded-full border border-line dark:border-white/10 flex items-center justify-center relative hover:bg-canvas dark:hover:bg-white/5 transition">
-          <Bell className="h-4.5 w-4.5 text-muted" />
-          <span className="absolute top-2 right-2.5 h-1.5 w-1.5 rounded-full bg-amber-500" />
-        </button>
+        <NotificationsBell />
 
         <div className="relative">
           <button

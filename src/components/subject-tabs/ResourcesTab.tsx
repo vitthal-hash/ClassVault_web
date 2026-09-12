@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Upload, FileText, Image as ImageIcon, Presentation, FileType, Trash2, Loader2 } from "lucide-react";
+import { Upload, FileText, Image as ImageIcon, Presentation, FileType, Trash2, Loader2, Sparkles } from "lucide-react";
 import { useLocalUser } from "@/lib/local/useLocalUser";
 import { Resources } from "@/lib/local/repo";
 import type { Resource, ResourceType } from "@/lib/local/types";
 import { resourceTypeFromExtension } from "@/lib/local/types";
-import { extractPdfText, ocrImage } from "@/lib/extract";
+import { extractPdfText, extractDocxText, extractPptxText, ocrImage } from "@/lib/extract";
 
 const ICONS: Record<ResourceType, any> = {
   pdf: FileText,
@@ -19,6 +19,8 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
   const username = useLocalUser();
   const [items, setItems] = useState<Resource[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [extractingId, setExtractingId] = useState<number | null>(null);
+  const [extractError, setExtractError] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -42,8 +44,12 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
         try {
           if (type === "pdf") text = await extractPdfText(file);
           else if (type === "image") text = await ocrImage(file);
+          else if (type === "word") text = await extractDocxText(file);
+          else if (type === "ppt") text = await extractPptxText(file);
         } catch {
-          // extraction is best-effort; upload still succeeds without text
+          // Extraction is best-effort (e.g. legacy binary .doc/.ppt files
+          // can't be parsed this way) — upload still succeeds without text,
+          // it just won't be visible to the subject AI assistant.
         }
         await Resources.create(username, subjectId, file, type, text);
       }
@@ -74,6 +80,19 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
     load();
   };
 
+  const reextract = async (r: Resource) => {
+    setExtractingId(r.id);
+    setExtractError(null);
+    try {
+      await Resources.reextract(r);
+      load();
+    } catch (e: any) {
+      setExtractError(e?.message || `Could not extract text from ${r.name}.`);
+    } finally {
+      setExtractingId(null);
+    }
+  };
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
@@ -92,6 +111,8 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
         />
       </div>
 
+      {extractError && <p className="text-sm text-red-500 mb-3">{extractError}</p>}
+
       {items.length === 0 ? (
         <div className="card p-10 text-center text-sm text-muted">No resources uploaded yet.</div>
       ) : (
@@ -107,8 +128,23 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
                   <p className="text-sm font-medium text-ink dark:text-white truncate">{r.name}</p>
                   <p className="text-xs text-muted">
                     {r.type.toUpperCase()} · {new Date(r.uploadedAt).toLocaleDateString()}
+                    {r.extractedText ? " · Visible to AI" : " · Not readable by AI yet"}
                   </p>
                 </button>
+                {!r.extractedText && (
+                  <button
+                    onClick={() => reextract(r)}
+                    disabled={extractingId === r.id}
+                    className="text-muted hover:text-brand-500"
+                    title="Extract text so the subject AI can read this file"
+                  >
+                    {extractingId === r.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </button>
+                )}
                 <button onClick={() => remove(r.id)} className="text-muted hover:text-red-500">
                   <Trash2 className="h-4 w-4" />
                 </button>

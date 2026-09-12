@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Send, Loader2, Sparkles, User, Paperclip, X } from "lucide-react";
+import { Send, Loader2, Sparkles, User, Paperclip, X, Mic, MicOff, Volume2, VolumeX, StopCircle } from "lucide-react";
 import { useLocalUser } from "@/lib/local/useLocalUser";
 import { ChatMessages } from "@/lib/local/repo";
 import type { ChatMessage } from "@/lib/local/types";
@@ -11,6 +11,7 @@ import { apiSubjectChat, apiAssistant } from "@/lib/api/client";
 import { extractDocxText, extractPdfText, extractPptxText, ocrImage } from "@/lib/extract";
 import { useTheme } from "@/lib/theme/ThemeContext";
 import { runAssistantAction } from "@/lib/assistant/dispatcher";
+import { useVoice } from "@/lib/voice";
 
 /**
  * subjectId: a real subject id for subject-scoped chat, or the global
@@ -32,6 +33,7 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
   const bottomRef = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const isGlobalAssistant = subjectId === GLOBAL_ASSISTANT_SUBJECT_ID;
+  const voice = useVoice();
 
   const load = useCallback(async () => {
     if (!username) return;
@@ -74,6 +76,7 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
 
   const send = async () => {
     if (!username || !input.trim() || sending) return;
+    voice.stopSpeaking();
     const text = input.trim();
     setInput("");
     setError(null);
@@ -98,6 +101,7 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
         const result = await apiAssistant(text);
         if (!result) throw new Error("No response from the assistant.");
         setMessages(await ChatMessages.forSubject(username, subjectId));
+        voice.speak(result.text);
         if (result.action && result.action.type !== "none") {
           await runAssistantAction(result.action, { username, router, setTheme });
         }
@@ -115,8 +119,9 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
     setMessages((prev) => [...prev, { id: -Date.now(), subjectId, role: "user", content: `${text}${attached.length ? `\n\n[Attached: ${attached.map((a) => a.name).join(", ")}]` : ""}`, createdAt: new Date().toISOString() }]);
     setSending(true);
     try {
-      await apiSubjectChat(subjectId, text, attached);
+      const reply = await apiSubjectChat(subjectId, text, attached);
       setMessages(await ChatMessages.forSubject(username, subjectId));
+      voice.speak(reply);
     } catch (e: any) {
       setError(e?.message || "Something went wrong reaching Gemini.");
     } finally {
@@ -124,8 +129,31 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
     }
   };
 
+  const toggleListening = () => {
+    if (voice.listening) {
+      voice.stopListening();
+      return;
+    }
+    voice.stopSpeaking();
+    voice.startListening((transcript) => {
+      setInput((prev) => (prev ? `${prev} ${transcript}` : transcript));
+    });
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-160px)]">
+      {voice.supported.output && (
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={() => voice.setVoiceEnabled(!voice.voiceEnabled)}
+            className="inline-flex items-center gap-1.5 text-xs font-medium text-muted hover:text-ink dark:hover:text-white transition"
+            title={voice.voiceEnabled ? "Turn off spoken replies" : "Turn on spoken replies"}
+          >
+            {voice.voiceEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+            {voice.voiceEnabled ? "Voice on" : "Voice off"}
+          </button>
+        </div>
+      )}
       <div className="flex-1 overflow-y-auto space-y-4 pr-1">
         {messages.length === 0 && (
           <div className="text-center text-sm text-muted py-16">
@@ -173,6 +201,20 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
 
       {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
 
+      {voice.speaking && (
+        <div className="mt-3 flex items-center justify-between rounded-xl2 bg-brand-50 dark:bg-brand-500/15 px-4 py-2.5">
+          <span className="flex items-center gap-2 text-xs font-medium text-brand-600 dark:text-brand-300">
+            <Volume2 className="h-3.5 w-3.5 animate-pulse" /> Speaking…
+          </span>
+          <button
+            onClick={voice.stopSpeaking}
+            className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 dark:text-brand-300 hover:underline"
+          >
+            <StopCircle className="h-3.5 w-3.5" /> Stop
+          </button>
+        </div>
+      )}
+
       {!isGlobalAssistant && (
         <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
           {AI_ACTIONS.map((action) => (
@@ -211,11 +253,25 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
         )}
         <input
           className="input"
-          placeholder="Type a message…"
+          placeholder={voice.listening ? "Listening…" : "Type a message…"}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && send()}
         />
+        {voice.supported.input && (
+          <button
+            className={`px-3 rounded-xl2 border transition ${
+              voice.listening
+                ? "bg-red-500 border-red-500 text-white animate-pulse"
+                : "btn-secondary"
+            }`}
+            title={voice.listening ? "Stop listening" : "Speak your question"}
+            onClick={toggleListening}
+            disabled={sending || extracting}
+          >
+            {voice.listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+          </button>
+        )}
         <button className="btn-primary" onClick={send} disabled={sending || extracting || !input.trim()}>
           <Send className="h-4 w-4" />
         </button>

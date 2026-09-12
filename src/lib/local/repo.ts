@@ -179,6 +179,24 @@ export const Resources = {
     // The server deletes the Cloudinary asset automatically when the record goes.
     await apiRemove("resources", id);
   },
+  /** Re-runs text extraction for a resource that was uploaded before it had
+   *  a matching extractor (e.g. PPT/Word uploaded before that support was
+   *  added), or whose extraction failed the first time. Fetches the file
+   *  back from its stored URL since only the URL - not the original File
+   *  object - is kept after upload. */
+  async reextract(resource: Resource) {
+    const res = await fetch(resource.fileRef);
+    if (!res.ok) throw new Error("Could not download the file to re-extract its text.");
+    const blob = await res.blob();
+    const extract = await import("@/lib/extract");
+    let text: string | null = null;
+    if (resource.type === "pdf") text = await extract.extractPdfText(blob);
+    else if (resource.type === "word") text = await extract.extractDocxText(blob);
+    else if (resource.type === "ppt") text = await extract.extractPptxText(blob);
+    else if (resource.type === "image") text = await extract.ocrImage(blob);
+    if (!text?.trim()) throw new Error("No readable text was found in this file.");
+    return apiUpsert<Resource>("resources", { ...resource, extractedText: text });
+  },
 };
 
 export const Lectures = {

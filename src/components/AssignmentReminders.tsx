@@ -19,8 +19,12 @@ export function AssignmentReminders() {
   }, []);
 
   useEffect(() => {
-    if (!username || permission !== "granted") return;
+    if (!username) return;
     const check = async () => {
+      // Re-read the live permission each tick rather than trusting the
+      // `permission` state snapshot below, since the student may have
+      // granted it from the notifications bell after this component mounted.
+      if (!("Notification" in window) || Notification.permission !== "granted") return;
       const assignments = await Assignments.all(username);
       const now = Date.now();
       for (const assignment of assignments) {

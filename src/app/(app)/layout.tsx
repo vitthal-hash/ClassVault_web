@@ -2,6 +2,7 @@
 
 import { useAuth } from "@/lib/auth/AuthContext";
 import { Sidebar } from "@/components/Sidebar";
+import { AssignmentReminders } from "@/components/AssignmentReminders";
 import { Loader2 } from "lucide-react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -27,6 +28,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen bg-canvas">
       <Sidebar />
       <main className="flex-1 min-w-0">{children}</main>
+      <AssignmentReminders />
     </div>
   );
 }
