@@ -39,7 +39,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-canvas dark:bg-[#0e0f1a]">
+    <div className="min-h-screen flex bg-canvas">
       <AuthShowcase
         eyebrow="Welcome back"
         headline="Pick up right where your last lecture left off."
@@ -69,7 +69,7 @@ export default function LoginPage() {
                 <div className="relative">
                   <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="alex"
@@ -83,7 +83,7 @@ export default function LoginPage() {
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
                   <input
-                    className="input pl-10 pr-10"
+                    className="input !pl-10 !pr-10"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}

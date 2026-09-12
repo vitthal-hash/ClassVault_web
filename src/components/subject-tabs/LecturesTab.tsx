@@ -88,7 +88,7 @@ export function LecturesTab({ subjectId }: { subjectId: number }) {
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-        <div className="flex rounded-xl2 border border-line dark:border-white/10 p-1 bg-canvas dark:bg-[#101223]">
+        <div className="flex rounded-xl2 border border-line dark:border-white/10 p-1 bg-canvas">
           {(["theory", "lab", "tutorial"] as SessionType[]).map((s) => (
             <button
               key={s}
@@ -130,7 +130,7 @@ export function LecturesTab({ subjectId }: { subjectId: number }) {
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={thumbs[l.id]} alt={l.lectureCode} className="w-full h-28 object-cover" />
               ) : (
-                <div className="w-full h-28 bg-canvas dark:bg-[#101223]" />
+                <div className="w-full h-28 bg-canvas" />
               )}
               {l.isStarred && (
                 <Star className="absolute top-2 right-2 h-4 w-4 text-amber-400 fill-amber-400" />
@@ -218,7 +218,7 @@ function LectureDetail({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex justify-end z-40">
-      <div className="w-full max-w-xl bg-surface dark:bg-[#131426] h-full overflow-y-auto p-6">
+      <div className="w-full max-w-xl bg-surface h-full overflow-y-auto p-6">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-bold text-ink dark:text-white">{lecture.lectureCode}</h3>
           <div className="flex items-center gap-3">

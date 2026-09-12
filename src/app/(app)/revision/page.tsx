@@ -56,7 +56,7 @@ export default function RevisionPage() {
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={thumbs[l.id]} alt={l.lectureCode} className="w-full h-28 object-cover" />
                 ) : (
-                  <div className="w-full h-28 bg-canvas dark:bg-[#101223]" />
+                  <div className="w-full h-28 bg-canvas" />
                 )}
                 <Star className="absolute top-2 right-2 h-4 w-4 text-amber-400 fill-amber-400" />
                 <div className="p-3">

@@ -114,10 +114,10 @@ export function AssignmentsTab({
                   onClick={() => toggle(a.id)}
                   className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                     a.status === "submitted"
-                      ? "bg-green-50 text-green-600"
+                      ? "bg-green-50 dark:bg-green-500/15 text-green-600 dark:text-green-400"
                       : overdue
-                      ? "bg-red-50 text-red-600"
-                      : "bg-amber-50 text-amber-600"
+                      ? "bg-red-50 dark:bg-red-500/15 text-red-600 dark:text-red-400"
+                      : "bg-amber-50 dark:bg-amber-500/15 text-amber-600 dark:text-amber-400"
                   }`}
                 >
                   {a.status === "submitted" ? "Submitted" : overdue ? "Overdue" : "Pending"}

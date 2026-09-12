@@ -10,8 +10,8 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        background: "var(--canvas)",
+        foreground: "var(--ink)",
         brand: {
           50: "#eef0ff",
           100: "#e0e3fe",
@@ -24,11 +24,17 @@ const config: Config = {
           800: "#363889",
           900: "#2f306e",
         },
-        surface: "#ffffff",
-        canvas: "#f4f5fb",
-        ink: "#14162b",
-        muted: "#6b7086",
-        line: "#e9eaf3",
+        // Theme-aware surface tokens: each resolves via a CSS variable that
+        // flips in `.dark`, so `bg-canvas`, `bg-surface`, `text-ink`, etc.
+        // are correct in both themes without needing a `dark:` variant at
+        // every call site. This is the single source of truth for the
+        // app's light/dark palette — see :root / .dark in globals.css.
+        canvas: "var(--canvas)",
+        surface: "var(--surface)",
+        surface2: "var(--surface-2)",
+        ink: "var(--ink)",
+        muted: "var(--muted)",
+        line: "var(--line)",
       },
       borderRadius: {
         xl2: "18px",

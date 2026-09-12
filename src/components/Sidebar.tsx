@@ -46,7 +46,7 @@ export function Sidebar() {
     .toUpperCase();
 
   return (
-    <aside className="w-64 shrink-0 h-screen sticky top-0 flex flex-col border-r border-line bg-surface dark:bg-[#131426] dark:border-white/5 px-4 py-5">
+    <aside className="w-64 shrink-0 h-screen sticky top-0 flex flex-col border-r border-line bg-surface px-4 py-5">
       <div className="flex items-center gap-2 px-2 mb-6">
         <div className="h-9 w-9 rounded-xl bg-brand-500 flex items-center justify-center shadow-soft">
           <Sparkles className="h-4.5 w-4.5 text-white" />

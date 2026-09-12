@@ -131,7 +131,7 @@ export default function SearchPage() {
         <div className="relative mb-6">
           <SearchIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
           <input
-            className="input pl-11"
+            className="input !pl-11"
             placeholder="Search subjects, lectures, resources, notes, assignments…"
             value={query}
             onChange={(e) => {

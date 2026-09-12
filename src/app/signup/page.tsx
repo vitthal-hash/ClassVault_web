@@ -48,7 +48,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="min-h-screen flex bg-canvas dark:bg-[#0e0f1a]">
+    <div className="min-h-screen flex bg-canvas">
       <AuthShowcase
         eyebrow="Get started"
         headline="A clear desk for a clear mind, from day one of semester."
@@ -78,7 +78,7 @@ export default function SignupPage() {
                 <div className="relative">
                   <IdCard className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     placeholder="Alex"
@@ -90,7 +90,7 @@ export default function SignupPage() {
                 <div className="relative">
                   <User className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="alex"
@@ -104,7 +104,7 @@ export default function SignupPage() {
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
                   <input
-                    className="input pl-10 pr-10"
+                    className="input !pl-10 !pr-10"
                     type={showPassword ? "text" : "password"}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
@@ -138,7 +138,7 @@ export default function SignupPage() {
                 <div className="relative">
                   <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted pointer-events-none" />
                   <input
-                    className="input pl-10"
+                    className="input !pl-10"
                     type={showPassword ? "text" : "password"}
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}

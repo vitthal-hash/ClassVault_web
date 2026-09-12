@@ -2,23 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Design tokens — single source of truth for the app's palette.
+ * Every surface/text/border color used across the app resolves through
+ * one of these variables, so the light/dark themes stay consistent by
+ * construction instead of relying on a `dark:` override scattered across
+ * every component (which is what caused the previous inconsistency).
+ */
 :root {
-  --background: #f4f5fb;
-  --foreground: #14162b;
+  --canvas: #f5f6fb;    /* page background */
+  --surface: #ffffff;   /* cards, sidebar, panels */
+  --surface-2: #eef0f8; /* subtle elevated/hover panels, chat bubbles */
+  --ink: #14162b;       /* primary text */
+  --muted: #6b7086;     /* secondary text */
+  --line: #e9eaf3;      /* borders */
 }
 
 .dark {
-  --background: #0e0f1a;
-  --foreground: #eceefb;
+  --canvas: #0a0b16;
+  --surface: #151729;
+  --surface-2: #1d2040;
+  --ink: #f2f3fb;
+  --muted: #9a9eba;
+  --line: rgba(255, 255, 255, 0.08);
 }
 
 * {
   border-color: theme("colors.line");
 }
 
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
 body {
-  color: var(--foreground);
-  background: var(--background);
+  color: var(--ink);
+  background: var(--canvas);
 }
 
 ::-webkit-scrollbar {
@@ -38,16 +60,23 @@ body {
     text-wrap: balance;
   }
   .card {
-    @apply bg-surface dark:bg-[#181a2e] rounded-xl2 shadow-soft border border-line dark:border-white/5;
+    @apply bg-surface rounded-xl2 shadow-soft border border-line transition-colors;
   }
   .btn-primary {
     @apply inline-flex items-center gap-2 rounded-xl2 bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white shadow-soft transition hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   .btn-secondary {
-    @apply inline-flex items-center gap-2 rounded-xl2 bg-white dark:bg-[#20223a] border border-line dark:border-white/10 px-4 py-2.5 text-sm font-semibold text-ink dark:text-white transition hover:bg-canvas dark:hover:bg-[#262844];
+    @apply inline-flex items-center gap-2 rounded-xl2 bg-surface2 border border-line px-4 py-2.5 text-sm font-semibold text-ink transition hover:bg-canvas;
   }
+  /* Base input styling, including default horizontal padding (px-3.5).
+     Inputs with a leading/trailing icon (login, signup, search) need
+     pl-10/pr-10 instead — those call sites use the `!` important modifier
+     so the icon padding always wins over this class's px-3.5, regardless
+     of Tailwind's internal utility-generation order. Without `!`, this
+     class and pl-10/pr-10 have equal specificity and .input can silently
+     win, which is what caused label text to overlap the icons. */
   .input {
-    @apply w-full rounded-xl border border-line dark:border-white/10 bg-white dark:bg-[#181a2e] px-3.5 py-2.5 text-sm text-ink dark:text-white placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500;
+    @apply w-full rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:border-brand-500 transition-colors;
   }
   .label {
     @apply text-xs font-semibold uppercase tracking-wide text-muted mb-1.5 block;

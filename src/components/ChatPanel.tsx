@@ -146,13 +146,13 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
               className={`max-w-[75%] rounded-xl2 px-4 py-2.5 text-sm whitespace-pre-wrap ${
                 m.role === "user"
                   ? "bg-brand-500 text-white"
-                  : "bg-canvas dark:bg-[#1c1e34] text-ink dark:text-white"
+                  : "bg-canvas dark:bg-surface2 text-ink dark:text-white"
               }`}
             >
               {m.content}
             </div>
             {m.role === "user" && (
-              <div className="h-8 w-8 rounded-full bg-canvas dark:bg-[#1c1e34] flex items-center justify-center shrink-0">
+              <div className="h-8 w-8 rounded-full bg-canvas dark:bg-surface2 flex items-center justify-center shrink-0">
                 <User className="h-4 w-4 text-muted" />
               </div>
             )}
@@ -163,7 +163,7 @@ export function ChatPanel({ subjectId, subjectName }: { subjectId: number; subje
             <div className="h-8 w-8 rounded-full bg-brand-500 flex items-center justify-center shrink-0">
               <Sparkles className="h-4 w-4 text-white" />
             </div>
-            <div className="rounded-xl2 px-4 py-2.5 bg-canvas dark:bg-[#1c1e34]">
+            <div className="rounded-xl2 px-4 py-2.5 bg-canvas dark:bg-surface2">
               <Loader2 className="h-4 w-4 animate-spin text-muted" />
             </div>
           </div>

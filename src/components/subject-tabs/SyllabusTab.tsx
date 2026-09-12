@@ -109,7 +109,7 @@ export function SyllabusTab({ subjectId }: { subjectId: number }) {
                 {showText ? "Hide extracted text" : "View extracted text"}
               </button>
               {showText && (
-                <div className="mt-3 max-h-72 overflow-y-auto rounded-xl bg-canvas dark:bg-[#101223] p-4 text-sm text-ink dark:text-white whitespace-pre-wrap">
+                <div className="mt-3 max-h-72 overflow-y-auto rounded-xl bg-canvas p-4 text-sm text-ink dark:text-white whitespace-pre-wrap">
                   {syllabus.extractedText}
                 </div>
               )}
