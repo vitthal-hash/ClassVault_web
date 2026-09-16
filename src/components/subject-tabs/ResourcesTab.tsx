@@ -1,12 +1,23 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Upload, FileText, Image as ImageIcon, Presentation, FileType, Trash2, Loader2, Sparkles } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Image as ImageIcon,
+  Presentation,
+  FileType,
+  Trash2,
+  Loader2,
+  Sparkles,
+  FolderInput,
+} from "lucide-react";
 import { useLocalUser } from "@/lib/local/useLocalUser";
-import { Resources } from "@/lib/local/repo";
+import { Resources, Subjects } from "@/lib/local/repo";
 import type { Resource, ResourceType } from "@/lib/local/types";
-import { resourceTypeFromExtension } from "@/lib/local/types";
+import { resourceTypeFromExtension, UNSORTED_UNIT } from "@/lib/local/types";
 import { extractPdfText, extractDocxText, extractPptxText, ocrImage } from "@/lib/extract";
+import { UnitBar, UnitSelect } from "@/components/UnitBar";
 
 const ICONS: Record<ResourceType, any> = {
   pdf: FileText,
@@ -18,6 +29,9 @@ const ICONS: Record<ResourceType, any> = {
 export function ResourcesTab({ subjectId }: { subjectId: number }) {
   const username = useLocalUser();
   const [items, setItems] = useState<Resource[]>([]);
+  const [units, setUnits] = useState<string[]>([]);
+  const [activeUnit, setActiveUnit] = useState<string | null>(null);
+  const [uploadUnit, setUploadUnit] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [extractingId, setExtractingId] = useState<number | null>(null);
   const [extractError, setExtractError] = useState<string | null>(null);
@@ -25,13 +39,23 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
 
   const load = useCallback(async () => {
     if (!username) return;
-    const all = await Resources.forSubject(username, subjectId);
+    const [all, subject] = await Promise.all([
+      Resources.forSubject(username, subjectId),
+      Subjects.get(username, subjectId),
+    ]);
     setItems(all.sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime()));
+    setUnits(subject?.units ?? []);
   }, [username, subjectId]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // When a unit is selected, new uploads default into it — that's almost
+  // always what the student means when they're working inside a unit.
+  useEffect(() => {
+    setUploadUnit(activeUnit === UNSORTED_UNIT ? null : activeUnit);
+  }, [activeUnit]);
 
   const onUpload = async (files: FileList) => {
     if (!username) return;
@@ -51,7 +75,7 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
           // can't be parsed this way) — upload still succeeds without text,
           // it just won't be visible to the subject AI assistant.
         }
-        await Resources.create(username, subjectId, file, type, text);
+        await Resources.create(username, subjectId, file, type, text, uploadUnit);
       }
       load();
     } finally {
@@ -80,6 +104,12 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
     load();
   };
 
+  const move = async (r: Resource, unit: string | null) => {
+    if (!username) return;
+    await Resources.setUnit(username, r, unit);
+    load();
+  };
+
   const reextract = async (r: Resource) => {
     setExtractingId(r.id);
     setExtractError(null);
@@ -93,14 +123,32 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
     }
   };
 
+  const counts: Record<string, number> = {};
+  for (const u of units) counts[u] = items.filter((i) => i.unit === u).length;
+  const unsortedCount = items.filter((i) => !i.unit || !units.includes(i.unit)).length;
+
+  const visible =
+    activeUnit === null
+      ? items
+      : activeUnit === UNSORTED_UNIT
+      ? items.filter((i) => !i.unit || !units.includes(i.unit))
+      : items.filter((i) => i.unit === activeUnit);
+
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
         <p className="text-sm text-muted">PDFs, PPTs, Word docs, and images for this subject.</p>
-        <button className="btn-primary text-sm" onClick={() => fileInput.current?.click()} disabled={uploading}>
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          Upload files
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <UnitSelect units={units} value={uploadUnit} onChange={setUploadUnit} className="w-36" />
+          <button
+            className="btn-primary text-sm"
+            onClick={() => fileInput.current?.click()}
+            disabled={uploading}
+          >
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Upload files
+          </button>
+        </div>
         <input
           ref={fileInput}
           type="file"
@@ -111,13 +159,41 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
         />
       </div>
 
+      <UnitBar
+        units={units}
+        active={activeUnit}
+        onSelect={setActiveUnit}
+        counts={counts}
+        unsortedCount={unsortedCount}
+        onCreate={async (name) => {
+          if (!username) return;
+          await Subjects.addUnit(username, subjectId, name);
+          await load();
+        }}
+        onRename={async (from, to) => {
+          if (!username) return;
+          await Subjects.renameUnit(username, subjectId, from, to);
+          if (activeUnit === from) setActiveUnit(to);
+          await load();
+        }}
+        onDelete={async (name) => {
+          if (!username) return;
+          await Subjects.removeUnit(username, subjectId, name);
+          await load();
+        }}
+      />
+
       {extractError && <p className="text-sm text-red-500 mb-3">{extractError}</p>}
 
-      {items.length === 0 ? (
-        <div className="card p-10 text-center text-sm text-muted">No resources uploaded yet.</div>
+      {visible.length === 0 ? (
+        <div className="card p-10 text-center text-sm text-muted">
+          {items.length === 0
+            ? "No resources uploaded yet."
+            : `Nothing in ${activeUnit} yet. Upload here or move files in from another unit.`}
+        </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {items.map((r) => {
+          {visible.map((r) => {
             const Icon = ICONS[r.type];
             return (
               <div key={r.id} className="card p-4 flex items-center gap-3">
@@ -131,6 +207,26 @@ export function ResourcesTab({ subjectId }: { subjectId: number }) {
                     {r.extractedText ? " · Visible to AI" : " · Not readable by AI yet"}
                   </p>
                 </button>
+
+                {units.length > 0 && (
+                  <div className="relative shrink-0" title="Move to a unit">
+                    <FolderInput className="h-4 w-4 text-muted pointer-events-none absolute left-0 top-1/2 -translate-y-1/2" />
+                    <select
+                      className="opacity-0 absolute inset-0 w-6 cursor-pointer"
+                      value={r.unit ?? ""}
+                      onChange={(e) => move(r, e.target.value || null)}
+                    >
+                      <option value="">{UNSORTED_UNIT}</option>
+                      {units.map((u) => (
+                        <option key={u} value={u}>
+                          {u}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="block w-5" />
+                  </div>
+                )}
+
                 {!r.extractedText && (
                   <button
                     onClick={() => reextract(r)}

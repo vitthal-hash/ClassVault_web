@@ -21,12 +21,20 @@ const ATTACHMENT_LIMIT = 30_000;
 const clean = (value: unknown) => (typeof value === "string" ? value.trim() : "");
 const clipped = (value: unknown, limit: number) => clean(value).slice(0, limit);
 
+/** Renders an item's unit as a heading suffix so the model can answer
+ *  unit-scoped questions ("quiz me on Unit 3") by matching on these tags. */
+const unitTag = (unit: unknown) => {
+  const u = clean(unit);
+  return u ? ` [${u}]` : "";
+};
+
 function buildContext(subjectName: string, data: {
   syllabus: any | null;
   notes: any[];
   resources: any[];
   lectures: any[];
   assignments: any[];
+  units: string[];
 }) {
   const sections: string[] = [];
   const add = (heading: string, value: unknown, limit = CONTEXT_LIMIT) => {
@@ -41,21 +49,21 @@ function buildContext(subjectName: string, data: {
   let noteBudget = 10_000;
   for (const note of data.notes) {
     const text = clipped(note.body, noteBudget);
-    add(`Note${note.title ? `: ${note.title}` : ""}`, text);
+    add(`Note${note.title ? `: ${note.title}` : ""}${unitTag(note.unit)}`, text);
     noteBudget -= text.length;
     if (noteBudget <= 0) break;
   }
   let resourceBudget = 18_000;
   for (const resource of data.resources) {
     const text = clipped(resource.extractedText, resourceBudget);
-    add(`${resource.type || "Resource"}: ${resource.name || "Untitled"}`, text);
+    add(`${resource.type || "Resource"}: ${resource.name || "Untitled"}${unitTag(resource.unit)}`, text);
     resourceBudget -= text.length;
     if (resourceBudget <= 0) break;
   }
   let lectureBudget = 17_000;
   for (const lecture of data.lectures) {
     const text = clipped(lecture.ocrText, lectureBudget);
-    add(`Lecture ${lecture.lectureCode || ""} (${lecture.sessionType || "class"})`, text);
+    add(`Lecture ${lecture.lectureCode || ""} (${lecture.sessionType || "class"})${unitTag(lecture.unit)}`, text);
     lectureBudget -= text.length;
     if (lectureBudget <= 0) break;
   }
@@ -68,12 +76,18 @@ function buildContext(subjectName: string, data: {
   }
 
   const material = sections.join("\n\n").slice(0, CONTEXT_LIMIT);
+  const unitsLine = data.units.length
+    ? `This subject is organised into these units: ${data.units.join(", ")}. Each item below is tagged with its unit in square brackets; items with no tag are unsorted. When the student asks about a specific unit, use only the material tagged with that unit.`
+    : "";
   return [
     `You are ClassVault's subject assistant for "${subjectName}".`,
+    unitsLine,
     "Stay strictly within this subject. Treat the student's saved material and any file attached to the current question as the primary source of truth.",
     "If the saved material does not answer a question, say that clearly and then offer helpful subject-specific guidance. Never claim to have read a file whose extracted text is absent.",
     material ? `SAVED SUBJECT MATERIAL:\n${material}` : "There is no extracted saved material yet. You may still help with the current question or its attachment.",
-  ].join("\n\n");
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 /** Subject-only chat. The server builds the grounding from the account's
@@ -113,7 +127,14 @@ export async function POST(req: NextRequest) {
     ChatMessage.find({ userId: user, subjectId }).sort({ createdAt: -1 }).limit(14).lean(),
   ]);
 
-  const context = buildContext(subject.name, { syllabus, notes, resources, lectures, assignments });
+  const context = buildContext(subject.name, {
+    syllabus,
+    notes,
+    resources,
+    lectures,
+    assignments,
+    units: Array.isArray((subject as any).units) ? (subject as any).units : [],
+  });
   const history = [
     { role: "user" as const, text: context },
     { role: "model" as const, text: "Understood. I will keep this conversation scoped to that subject and its material." },

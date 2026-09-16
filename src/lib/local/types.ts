@@ -117,6 +117,10 @@ export interface Subject {
   name: string;
   code?: string | null;
   isPinned: boolean;
+  /** Student-defined units/folders for this subject, in display order.
+   *  Stored on the subject (rather than derived from the items that use
+   *  them) so an empty unit can be created up front and filled later. */
+  units?: string[];
   createdAt: string;
 }
 
@@ -154,6 +158,9 @@ export interface Resource {
   name: string;
   fileRef: string;
   type: ResourceType;
+  /** Name of the unit/folder this belongs to, or null/absent for
+   *  "Unsorted". Matched by name against Subject.units. */
+  unit?: string | null;
   extractedText?: string | null;
   uploadedAt: string;
 }
@@ -164,6 +171,7 @@ export interface Lecture {
   sessionType: SessionType;
   lectureCode: string;
   imageRef: string;
+  unit?: string | null;
   capturedAt: string;
   createdAt: string;
   isStarred: boolean;
@@ -185,6 +193,7 @@ export interface Note {
   id: number;
   subjectId: number;
   title?: string | null;
+  unit?: string | null;
   body: string;
   createdAt: string;
   updatedAt: string;
@@ -221,3 +230,6 @@ export function timeRangeLabel(startMinutes: number, endMinutes: number) {
 export function isAssignmentOverdue(a: Assignment) {
   return a.status === "pending" && new Date(a.deadline).getTime() < Date.now();
 }
+
+/** Label used in the UI for items that haven't been put in a unit yet. */
+export const UNSORTED_UNIT = "Unsorted";

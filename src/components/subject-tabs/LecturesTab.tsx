@@ -14,7 +14,8 @@ import {
 import { useLocalUser } from "@/lib/local/useLocalUser";
 import { Lectures, Subjects } from "@/lib/local/repo";
 import type { Lecture, SessionType, Subject } from "@/lib/local/types";
-import { AI_ACTIONS } from "@/lib/local/types";
+import { AI_ACTIONS, UNSORTED_UNIT } from "@/lib/local/types";
+import { UnitBar, UnitSelect } from "@/components/UnitBar";
 import { ocrImage } from "@/lib/extract";
 import { apiGenerate } from "@/lib/api/client";
 
@@ -26,6 +27,8 @@ export function LecturesTab({ subjectId }: { subjectId: number }) {
   const [thumbs, setThumbs] = useState<Record<number, string>>({});
   const [detail, setDetail] = useState<Lecture | null>(null);
   const [sessionType, setSessionType] = useState<SessionType>("theory");
+  const [activeUnit, setActiveUnit] = useState<string | null>(null);
+  const [uploadUnit, setUploadUnit] = useState<string | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -48,13 +51,18 @@ export function LecturesTab({ subjectId }: { subjectId: number }) {
     load();
   }, [load]);
 
+  // When a unit is selected, new uploads default into it.
+  useEffect(() => {
+    setUploadUnit(activeUnit === UNSORTED_UNIT ? null : activeUnit);
+  }, [activeUnit]);
+
   const onUpload = async (files: FileList) => {
     if (!username || !subject) return;
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
         const code = await Lectures.nextCode(username, subject, sessionType);
-        const created = await Lectures.create(username, subjectId, sessionType, code, file);
+        const created = await Lectures.create(username, subjectId, sessionType, code, file, uploadUnit);
         try {
           const text = await ocrImage(file);
           await Lectures.update(username, { ...created, ocrText: text });
@@ -85,6 +93,17 @@ export function LecturesTab({ subjectId }: { subjectId: number }) {
     load();
   };
 
+  const units = subject?.units ?? [];
+  const counts: Record<string, number> = {};
+  for (const u of units) counts[u] = lectures.filter((l) => l.unit === u).length;
+  const unsortedCount = lectures.filter((l) => !l.unit || !units.includes(l.unit)).length;
+  const visible =
+    activeUnit === null
+      ? lectures
+      : activeUnit === UNSORTED_UNIT
+      ? lectures.filter((l) => !l.unit || !units.includes(l.unit))
+      : lectures.filter((l) => l.unit === activeUnit);
+
   return (
     <div>
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
@@ -101,10 +120,13 @@ export function LecturesTab({ subjectId }: { subjectId: number }) {
             </button>
           ))}
         </div>
-        <button className="btn-primary text-sm" onClick={() => fileInput.current?.click()} disabled={uploading}>
-          {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-          Upload photo
-        </button>
+        <div className="flex items-center gap-2">
+          <UnitSelect units={units} value={uploadUnit} onChange={setUploadUnit} className="w-36" />
+          <button className="btn-primary text-sm" onClick={() => fileInput.current?.click()} disabled={uploading}>
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+            Upload photo
+          </button>
+        </div>
         <input
           ref={fileInput}
           type="file"
@@ -116,11 +138,37 @@ export function LecturesTab({ subjectId }: { subjectId: number }) {
         />
       </div>
 
-      {lectures.length === 0 ? (
-        <div className="card p-10 text-center text-sm text-muted">No lectures uploaded yet.</div>
+      <UnitBar
+        units={units}
+        active={activeUnit}
+        onSelect={setActiveUnit}
+        counts={counts}
+        unsortedCount={unsortedCount}
+        onCreate={async (name) => {
+          if (!username) return;
+          await Subjects.addUnit(username, subjectId, name);
+          await load();
+        }}
+        onRename={async (from, to) => {
+          if (!username) return;
+          await Subjects.renameUnit(username, subjectId, from, to);
+          if (activeUnit === from) setActiveUnit(to);
+          await load();
+        }}
+        onDelete={async (name) => {
+          if (!username) return;
+          await Subjects.removeUnit(username, subjectId, name);
+          await load();
+        }}
+      />
+
+      {visible.length === 0 ? (
+        <div className="card p-10 text-center text-sm text-muted">
+          {lectures.length === 0 ? "No lectures uploaded yet." : `No lectures in ${activeUnit} yet.`}
+        </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {lectures.map((l) => (
+          {visible.map((l) => (
             <button
               key={l.id}
               onClick={() => setDetail(l)}
@@ -137,7 +185,8 @@ export function LecturesTab({ subjectId }: { subjectId: number }) {
               )}
               <div className="p-2.5">
                 <p className="text-xs font-semibold text-ink dark:text-white truncate">{l.lectureCode}</p>
-                <p className="text-[11px] text-muted">
+                <p className="text-[11px] text-muted truncate">
+                  {l.unit ? `${l.unit} · ` : ""}
                   {l.ocrText ? "Reviewed" : "Pending OCR"}
                 </p>
               </div>

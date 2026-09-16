@@ -41,6 +41,7 @@ export const Subject = makeModel("Subject", {
   name: { type: String, required: true },
   code: { type: String, default: null },
   isPinned: { type: Boolean, default: false },
+  units: { type: [String], default: [] },
   createdAt: { type: String, required: true },
 });
 
@@ -78,6 +79,7 @@ export const Resource = makeModel("Resource", {
   filePublicId: { type: String, default: null },
   fileResourceType: { type: String, default: null },
   type: { type: String, required: true },
+  unit: { type: String, default: null },
   extractedText: { type: String, default: null },
   uploadedAt: { type: String, required: true },
 });
@@ -89,6 +91,7 @@ export const Lecture = makeModel("Lecture", {
   imageRef: { type: String, required: true },
   imagePublicId: { type: String, default: null },
   imageResourceType: { type: String, default: null },
+  unit: { type: String, default: null },
   capturedAt: { type: String, required: true },
   createdAt: { type: String, required: true },
   isStarred: { type: Boolean, default: false },
@@ -110,6 +113,7 @@ export const Assignment = makeModel("Assignment", {
 export const Note = makeModel("Note", {
   subjectId: { type: Number, required: true },
   title: { type: String, default: null },
+  unit: { type: String, default: null },
   body: { type: String, required: true },
   createdAt: { type: String, required: true },
   updatedAt: { type: String, required: true },

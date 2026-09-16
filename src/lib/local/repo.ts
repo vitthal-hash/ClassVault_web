@@ -83,6 +83,58 @@ export const Subjects = {
     if (!s) return;
     return apiUpsert<Subject>("subjects", { ...s, isPinned: !s.isPinned });
   },
+  /** Adds a unit/folder to a subject. Names are unique case-insensitively
+   *  so "Unit 1" and "unit 1" can't both exist and split a student's files. */
+  async addUnit(user: string, subjectId: number, name: string) {
+    const s = await Subjects.get(user, subjectId);
+    if (!s) return;
+    const trimmed = name.trim();
+    if (!trimmed) return s;
+    const units = s.units ?? [];
+    if (units.some((u) => u.toLowerCase() === trimmed.toLowerCase())) return s;
+    return apiUpsert<Subject>("subjects", { ...s, units: [...units, trimmed] });
+  },
+  async renameUnit(user: string, subjectId: number, from: string, to: string) {
+    const s = await Subjects.get(user, subjectId);
+    if (!s) return;
+    const trimmed = to.trim();
+    if (!trimmed || trimmed === from) return s;
+    const units = (s.units ?? []).map((u) => (u === from ? trimmed : u));
+    const updated = await apiUpsert<Subject>("subjects", { ...s, units });
+    // Re-point every item that referenced the old name.
+    await Promise.all([
+      ...(await Resources.forSubject(user, subjectId))
+        .filter((r) => r.unit === from)
+        .map((r) => apiUpsert<Resource>("resources", { ...r, unit: trimmed })),
+      ...(await Lectures.forSubject(user, subjectId))
+        .filter((l) => l.unit === from)
+        .map((l) => apiUpsert<Lecture>("lectures", { ...l, unit: trimmed })),
+      ...(await Notes.forSubject(user, subjectId))
+        .filter((n) => n.unit === from)
+        .map((n) => apiUpsert<Note>("notes", { ...n, unit: trimmed })),
+    ]);
+    return updated;
+  },
+  /** Deletes a unit. Items inside are NOT deleted - they fall back to
+   *  "Unsorted", so a mis-click can never destroy a student's uploads. */
+  async removeUnit(user: string, subjectId: number, name: string) {
+    const s = await Subjects.get(user, subjectId);
+    if (!s) return;
+    const units = (s.units ?? []).filter((u) => u !== name);
+    const updated = await apiUpsert<Subject>("subjects", { ...s, units });
+    await Promise.all([
+      ...(await Resources.forSubject(user, subjectId))
+        .filter((r) => r.unit === name)
+        .map((r) => apiUpsert<Resource>("resources", { ...r, unit: null })),
+      ...(await Lectures.forSubject(user, subjectId))
+        .filter((l) => l.unit === name)
+        .map((l) => apiUpsert<Lecture>("lectures", { ...l, unit: null })),
+      ...(await Notes.forSubject(user, subjectId))
+        .filter((n) => n.unit === name)
+        .map((n) => apiUpsert<Note>("notes", { ...n, unit: null })),
+    ]);
+    return updated;
+  },
   async remove(user: string, id: number) {
     await apiRemove("subjects", id);
   },
@@ -161,7 +213,8 @@ export const Resources = {
     subjectId: number,
     file: File,
     type: Resource["type"],
-    extractedText: string | null
+    extractedText: string | null,
+    unit: string | null = null
   ) {
     const uploaded = await apiUpload(file);
     return apiUpsert<Resource>("resources", {
@@ -171,9 +224,14 @@ export const Resources = {
       filePublicId: uploaded.publicId,
       fileResourceType: uploaded.resourceType,
       type,
+      unit,
       extractedText,
       uploadedAt: new Date().toISOString(),
     });
+  },
+  /** Moves a resource into a different unit (or out to Unsorted with null). */
+  async setUnit(user: string, resource: Resource, unit: string | null) {
+    return apiUpsert<Resource>("resources", { ...resource, unit });
   },
   async remove(user: string, id: number) {
     // The server deletes the Cloudinary asset automatically when the record goes.
@@ -215,7 +273,8 @@ export const Lectures = {
     subjectId: number,
     sessionType: Lecture["sessionType"],
     lectureCode: string,
-    file: File
+    file: File,
+    unit: string | null = null
   ) {
     const uploaded = await apiUpload(file);
     return apiUpsert<Lecture>("lectures", {
@@ -225,6 +284,7 @@ export const Lectures = {
       imageRef: uploaded.url,
       imagePublicId: uploaded.publicId,
       imageResourceType: uploaded.resourceType,
+      unit,
       capturedAt: new Date().toISOString(),
       createdAt: new Date().toISOString(),
       isStarred: false,
@@ -308,9 +368,23 @@ export const Notes = {
       .filter((n) => n.subjectId === subjectId)
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   },
-  async create(user: string, subjectId: number, title: string | null, body: string) {
+  async create(
+    user: string,
+    subjectId: number,
+    title: string | null,
+    body: string,
+    unit: string | null = null
+  ) {
     const now = new Date().toISOString();
-    return apiUpsert<Note>("notes", { subjectId, title, body, createdAt: now, updatedAt: now, remindMe: false });
+    return apiUpsert<Note>("notes", {
+      subjectId,
+      title,
+      unit,
+      body,
+      createdAt: now,
+      updatedAt: now,
+      remindMe: false,
+    });
   },
   async update(user: string, note: Note) {
     return apiUpsert<Note>("notes", { ...note, updatedAt: new Date().toISOString() });
